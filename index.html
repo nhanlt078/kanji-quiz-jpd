@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kanji Quiz</title>
+  <style>
+    :root { --ink:#192033; --muted:#667085; --accent:#e85635; --paper:#fffdf9; --line:#e7e1d8; --good:#16805a; --bad:#c63c3c; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:linear-gradient(135deg,#f9eee2,#eef3ef); }
+    main { width:min(760px,calc(100% - 32px)); margin:40px auto; }
+    header { display:flex; align-items:end; justify-content:space-between; gap:16px; margin-bottom:20px; }
+    h1 { margin:0; font-size:clamp(28px,5vw,42px); letter-spacing:-1px; } h1 span { color:var(--accent); }
+    header p { margin:5px 0 0; color:var(--muted); }
+    .score { text-align:right; font-weight:700; white-space:nowrap; }.score small { display:block; color:var(--muted); font-weight:500; }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:22px; padding:24px; box-shadow:0 14px 36px #5e493011; }
+    .controls { display:flex; gap:10px; margin-bottom:28px; flex-wrap:wrap; } select,button { font:inherit; border-radius:10px; padding:10px 13px; border:1px solid var(--line); background:white; color:var(--ink); cursor:pointer; } button:hover:not(:disabled) { transform:translateY(-1px); } #next { background:var(--ink); color:white; border-color:var(--ink); margin-left:auto; }
+    .label { color:var(--muted); font-size:14px; text-transform:uppercase; letter-spacing:.08em; } .kanji { font-size:clamp(72px,18vw,132px); text-align:center; line-height:1.2; margin:18px 0 28px; font-family:"Yu Mincho","Noto Serif JP",serif; }
+    .options { display:grid; grid-template-columns:1fr 1fr; gap:10px; }.option { text-align:left; font-size:20px; min-height:58px; transition:.15s; }.option b { color:var(--accent); margin-right:10px; font-size:14px; }.option:disabled { cursor:default; opacity:1; }.correct { background:#e2f4ed!important; border-color:var(--good)!important; color:#075a3b!important; }.wrong { background:#fce7e6!important; border-color:var(--bad)!important; color:#8d2424!important; }
+    #result { margin-top:18px; padding:0 16px; max-height:0; overflow:hidden; background:#f4f1eb; border-radius:12px; transition:.25s; }.show { padding:15px 16px!important; max-height:180px!important; }.answer { font-size:26px; font-weight:750; }.meaning { color:var(--muted); margin:5px 0 0; }.message { margin:0 0 8px; font-weight:700; }.correct-text { color:var(--good); }.wrong-text { color:var(--bad); }
+    footer { margin:18px 4px; color:var(--muted); font-size:13px; text-align:center; } kbd { padding:1px 5px; background:white; border:1px solid var(--line); border-radius:4px; }
+    @media(max-width:520px) { main { margin:22px auto; } header { align-items:start; flex-direction:column; }.score{text-align:left}.panel{padding:18px}.options{grid-template-columns:1fr;} #next{margin-left:0;} }
+  </style>
+</head>
+<body>
+<main>
+  <header><div><h1>Kanji <span>Quiz</span></h1><p>Chọn cách đọc Hiragana đúng cho Kanji.</p></div><div class="score"><span id="score">0 / 0</span><small>Đúng / Đã làm</small></div></header>
+  <section class="panel">
+    <div class="controls"><select id="unit" aria-label="Chọn unit"></select><button id="shuffle" type="button">Xáo trộn</button><button id="restart" type="button">↻ Làm lại</button><button id="next" type="button">Câu tiếp ›</button></div>
+    <div class="label" id="progress">Câu hỏi</div><div class="kanji" id="kanji">東</div>
+    <div class="options" id="options"></div>
+    <div id="result" aria-live="polite"></div>
+  </section>
+  <footer>Phím <kbd>1</kbd>–<kbd>4</kbd> để chọn đáp án · <kbd>Enter</kbd> để qua câu tiếp theo</footer>
+</main>
+<script>
+const raw = `4|東|ひがし|Phía đông
+4|東京|とうきょう|Tokyo
+4|名前|なまえ|Tên
+4|前|まえ|Phía trước
+4|午前|ごぜん|AM (Sáng)
+4|前日|ぜんじつ|Trước ngày
+4|国|くに|Đất nước
+4|中国|ちゅうごく|Trung Quốc
+4|外国|がいこく|Nước ngoài
+4|男の人|おとこのひと|Người đàn ông
+4|女の人|おんなのひと|Người phụ nữ
+4|男女|だんじょ|Nam nữ
+5|先生|せんせい|Giáo viên
+5|先日|せんじつ|Ngày trước
+5|先月|せんげつ|Tháng trước
+5|先週|せんしゅう|Tuần trước
+5|一週間|いっしゅうかん|Một tuần
+5|毎日|まいにち|Mỗi ngày
+5|毎月|まいつき|Mỗi tháng
+5|毎週|まいしゅう|Mỗi tuần
+5|毎年|まいとし|Mỗi năm
+5|午後|ごご|PM (Buổi chiều)
+5|後ろ|うしろ|Phía sau
+5|前後|ぜんご|Trước sau
+5|見ます|みます|Xem
+5|見学|けんがく|Tham quan và học tập
+5|食べます|たべます|Ăn
+5|食事|しょくじ|Việc dùng bữa
+5|飲みます|のみます|Uống
+5|飲み水|のみみず|Nước uống
+5|飲食|いんしょく|Ẩm thực
+5|買います|かいます|Mua
+5|食べ物|たべもの|Đồ ăn
+5|飲み物|のみもの|Đồ uống
+5|買い物|かいもの|Đồ mua
+5|人物|じんぶつ|Nhân vật
+5|行きます|いきます|Đi
+5|休み|やすみ|Nghỉ
+5|休みます|やすみます|Nghỉ
+5|休日|きゅうじつ|Ngày nghỉ
+6|今|いま|Bây giờ
+6|今日|きょう|Hôm nay
+6|今週|こんしゅう|Tuần này
+6|今月|こんげつ|Tháng này
+6|今年|ことし|Năm nay
+6|来ます|きます|Đến
+6|来日|らいにち|Đến Nhật
+6|来週|らいしゅう|Tuần sau
+6|来月|らいげつ|Tháng sau
+6|来年|らいねん|Năm sau
+6|帰ります|かえります|Về
+6|帰国|きこく|Về nước
+6|日帰り|ひがえり|Về trong ngày
+6|会います|あいます|Gặp
+6|飲み会|のみかい|Tiệc nhậu
+6|国会|こっかい|Quốc hội
+6|会社|かいしゃ|Công ty
+6|社会|しゃかい|Xã hội
+6|聞きます|ききます|Nghe
+6|新聞|しんぶん|Tờ báo
+6|読みます|よみます|Đọc
+6|読み物|よみもの|Tài liệu đọc
+6|書きます|かきます|Viết
+6|辞書|じしょ|Từ điển
+6|読書|どくしょ|Việc đọc sách
+6|話します|はなします|Nói chuyện
+6|電話|でんわ|Gọi điện thoại
+6|会話|かいわ|Hội thoại
+6|言葉|ことば|Từ vựng
+6|田中さん|たなかさん|Họ người Nhật
+6|水田|すいでん|Ruộng lúa nước
+6|力|ちから|Sức mạnh
+7|肉|にく|Thịt
+7|牛肉|ぎゅうにく|Thịt bò
+7|鶏肉|とりにく|Thịt gà
+7|豚肉|ぶたにく|Thịt heo
+7|料金|りょうきん|Chi phí
+7|料理|りょうり|Nấu ăn
+7|野菜|やさい|Rau củ
+7|一時半|いちじはん|Một giờ rưỡi
+7|半分|はんぶん|Phân nửa
+7|半日|はんじつ・はんにち|Nửa ngày
+7|半年|はんとし|Nửa năm
+7|大きい|おおきい|To, lớn
+7|大人|おとな|Người lớn
+7|大学|だいがく|Đại học
+7|大学生|だいがくせい|Sinh viên đại học
+7|大会|たいかい|Đại hội
+7|小さい|ちいさい|Nhỏ
+7|小学校|しょうがっこう|Trường tiểu học
+7|小学生|しょうがくせい|Học sinh tiểu học
+8|家|おおや|Chủ trọ
+8|家族|かぞく|Gia tộc
+8|父|ちち|Cha
+8|お父さん|おとうさん|Cha của người khác
+8|母|はは|Mẹ
+8|お母さん|おかあさん|Mẹ của người khác
+8|兄|あに|Anh trai
+8|お兄さん|おにいさん|Anh trai của người khác
+8|弟|おとうと|Em trai
+8|姉|あね|Chị gái
+8|お姉さん|おねえさん|Chị gái của người khác
+8|妹|いもうと|Em gái
+8|犬|いぬ|Con chó
+8|高い|たかい|Cao
+8|高校|こうこう|Trường trung học
+8|高校生|こうこうせい|Học sinh trung học
+8|短い|みじかい|Ngắn
+8|短大|たんだい|Cao đẳng
+8|長い|ながい|Dài
+8|社長|しゃちょう|Giám đốc công ty
+8|校長|こうちょう|Hiệu trưởng trường học
+9|好|すき|Thích
+9|大好き|だいすき|Rất thích
+9|歌|うた|Bài hát
+9|歌う|うたう|Hát
+9|国家|こっか|Quốc ca
+9|短歌|たんか|Thơ ngắn
+9|音|おと|Âm thanh
+9|楽しい|たのしい|Vui vẻ
+9|音楽|おんがく|Âm nhạc
+9|車|くるま|Xe
+9|映画|えいが|Phim ảnh
+9|計画|けいかく|Kế hoạch
+9|旅|たび|Chuyến đi
+9|旅行|りょこう|Du lịch
+9|海|うみ|Biển
+9|海水|かいすい|Nước biển
+9|家の外|いえのそと|Bên ngoài nhà
+9|外国語|がいこくご|Ngoại ngữ
+9|外国人|がいこくじん|Người nước ngoài
+9|海外|かいがい|Nước ngoài
+10|駅|えき|Nhà ga
+10|駅長|えきちょう|Trưởng ga
+10|上|うえ|Phía trên
+10|上京|じょうきょう|Tới Tokyo
+10|下|した|Phía dưới
+10|下車|げしゃ|Xuống xe
+10|上下|じょうげ|Trên dưới
+10|土地|とち|Đất đai
+10|地下|ちか|Ngầm
+10|地図|ちず|Bản đồ
+10|図|ず|Hình vẽ
+10|図書館|としょかん|Thư viện
+10|旅館|りょかん|Lữ quán
+10|右|みぎ|Phải
+10|左|ひだり|Trái
+10|左右|さゆう|Trái phải
+10|道|みち|Đường
+10|書道|しょどう|Thư pháp
+10|国道|こくどう|Quốc lộ
+10|車道|しゃどう|Lòng đường
+11|起きる|おきる|Thức dậy
+11|起こす|おこす|Làm xảy ra
+11|歩く|あるく|Đi bộ
+11|歩行|ほこう|Đi lại
+11|一歩|いっぽ|Một bước
+11|乗る|のる|Lên xe
+11|乗せる|のせる|Chất lên
+11|始める|はじめる|Bắt đầu (tha động từ)
+11|始まる|はじまる|Bắt đầu (tự động từ)
+11|終わる|おわる|Kết thúc (tự động từ)
+11|終える|おえる|Kết thúc (tha động từ)
+11|始終|しじゅう|Bắt đầu và kết thúc
+11|勉強|べんきょう|Học tập
+11|勉学|べんがく|Chăm chỉ học tập
+11|強い|つよい|Mạnh mẽ
+11|朝|あさ|Buổi sáng
+11|朝食|ちょうしょく|Bữa sáng
+11|今朝|けさ|Sáng nay
+11|毎朝|まいあさ|Mỗi buổi sáng
+11|昼|ひる|Buổi trưa
+11|昼食|ちゅうしょく|Bữa trưa
+11|夜|よる|Buổi tối
+11|夜道|よみち|Đường phố ban đêm
+11|夜会|やかい|Dạ hội
+11|夜間|やかん|Ban đêm`;
+const words=raw.split('\n').map(line=>{const [unit,kanji,hira,meaning]=line.split('|');return{unit,kanji,hira,meaning}});
+const $=s=>document.querySelector(s), unit=$('#unit'), options=$('#options'), result=$('#result'); let pool=[], current, answered=false, right=0, total=0;
+const shuffle=a=>[...a].sort(()=>Math.random()-.5);
+function setPool(){ const chosen=unit.value; pool=shuffle(words.filter(w=>chosen==='all'||w.unit===chosen)); next(); }
+function next(){ if(!pool.length){ const chosen=unit.value; pool=shuffle(words.filter(w=>chosen==='all'||w.unit===chosen)); } current=pool.pop(); answered=false; result.className=''; result.innerHTML=''; $('#kanji').textContent=current.kanji; $('#progress').textContent=`Unit ${current.unit} · còn ${pool.length+1} từ`; const distractors=shuffle([...new Set(words.filter(w=>w.hira!==current.hira).map(w=>w.hira))]).slice(0,3); const answers=shuffle([current.hira,...distractors]); options.innerHTML=''; answers.forEach((answer,i)=>{const b=document.createElement('button');b.className='option';b.innerHTML=`<b>${'ABCD'[i]}</b>${answer}`;b.onclick=()=>choose(b,answer);options.append(b)}); }
+function choose(button, answer){ if(answered)return; answered=true; const correct=answer===current.hira; total++; if(correct)right++; [...options.children].forEach(b=>{b.disabled=true;if(b.textContent.trim().endsWith(current.hira))b.classList.add('correct')}); if(!correct)button.classList.add('wrong'); result.className='show'; result.innerHTML=`<p class="message ${correct?'correct-text':'wrong-text'}">${correct?'✓ Chính xác!':'✕ Chưa đúng.'}</p><div class="answer">${current.kanji} — ${current.hira}</div><p class="meaning">Nghĩa tiếng Việt: ${current.meaning}</p>`; $('#score').textContent=`${right} / ${total}`; }
+function restart(){ right=0; total=0; $('#score').textContent='0 / 0'; setPool(); }
+for(const n of [...new Set(words.map(w=>w.unit))]) unit.add(new Option(`Unit ${n}`,n)); unit.add(new Option('Tất cả Unit','all')); unit.value='all'; unit.onchange=setPool; $('#shuffle').onclick=setPool; $('#restart').onclick=restart; $('#next').onclick=next;
+document.addEventListener('keydown',e=>{if(e.key==='Enter'){next();return}const n=Number(e.key);if(n>=1&&n<=4&&!answered)options.children[n-1]?.click()}); setPool();
+</script>
+</body>
+</html>
